@@ -2,9 +2,26 @@
 #include <omp.h>
 #include "integration.h"
 #include <math.h>
+#include <limits>
 
 using namespace std;
-const int DECISION_VALUE = 40000;
+namespace {
+    const int DECISION_VALUE = 40000;
+    const int RUNS = 50;
+}
+
+struct m_time {
+    float min = std::numeric_limits<float>::max();
+    float average = 0;
+    float max = 0;
+
+    void print(const string &name) {
+        cout << name << endl;
+        cout <<" Min Time: " << min << "ms"<< endl;
+        cout <<" Max Time: " << max << "ms"<< endl;
+        cout <<" Average Time: " << average << "ms"<< endl << endl;
+    }
+};
 
 float cpuFormula(float x) {
     return log10f(x);
@@ -27,6 +44,7 @@ float cpuIntegrate(float left, float right, int segments, float step) {
 Result runOnGPU(float left, float right, int segments, float step);
 Result runONCPU(float left, float right, int segments, float step);
 Result optimizedVersion(float left, float right, int segments, float step);
+void updateTime(m_time* time, Result* result);
 
 int main() {
 
@@ -44,10 +62,24 @@ int main() {
     cout << "GPU. Value: " << gpu.value <<" Time: " << gpu.time << "ms"<< endl;
     cout << "Comb. Value: " << comb.value <<" Time: " << comb.time << "ms"<< endl;
 
+    m_time cpuTime;
+    m_time gpuTime;
+    m_time combTime;
+    for (int i = 0; i < RUNS; ++i) {
+        cpu = runONCPU(LEFT, RIGHT, SEGMENTS, STEP);
+        gpu = runOnGPU(LEFT, RIGHT, SEGMENTS, STEP);
+        comb = optimizedVersion(LEFT, RIGHT, SEGMENTS, STEP);
+        updateTime(&cpuTime, &cpu);
+        updateTime(&gpuTime, &gpu);
+        updateTime(&combTime, &comb);
+    }
+    cpuTime.average /= RUNS;
+    gpuTime.average /= RUNS;
+    combTime.average /= RUNS;
 
-
-
-
+    cpuTime.print("CPU");
+    gpuTime.print("GPU");
+    combTime.print("COMBINED");
 
     return 0;
 }
@@ -68,3 +100,11 @@ Result optimizedVersion(float left, float right, int segments, float step) {
     return segments < DECISION_VALUE ?
         runONCPU(left, right, segments, step) : runOnGPU(left, right, segments, step);
 }
+
+void updateTime(m_time *time, Result *result) {
+    time->min = time->min > result->time ? result->time : time->min;
+    time->max = time->max < result->time ? result->time : time->max;
+    time->average += result->time;
+}
+
+
